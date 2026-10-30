@@ -1,0 +1,34 @@
+# Git and documentation
+.git
+.gitignore
+README.md
+
+# Dependencies & build caches
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# Local environment and secret files
+.env
+.env.local
+.env.*.local
+
+# Tests and temporary files
+test
+test-*.js
+*.bat
+run.bat
+
+# IDE and OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.tmp
+
+# AI / System caches
+.gemini
+.system_generated
+scratch

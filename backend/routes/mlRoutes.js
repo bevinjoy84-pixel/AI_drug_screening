@@ -30,7 +30,7 @@ router.get('/metrics', (req, res) => {
  */
 router.post('/predict', (req, res) => {
   try {
-    const { properties } = req.body;
+    const { properties } = req.body || {};
     if (!properties) {
       return res.status(400).json({
         success: false,
@@ -54,13 +54,18 @@ router.post('/predict', (req, res) => {
  */
 router.post('/retrain', (req, res) => {
   try {
-    const { testSplitRatio, learningRate, epochs, l2Regularization } = req.body;
+    const { testSplitRatio, learningRate, epochs, l2Regularization } = req.body || {};
+
+    const split = Math.min(0.5, Math.max(0.1, parseFloat(testSplitRatio) || 0.20));
+    const lr = Math.min(1.0, Math.max(0.001, parseFloat(learningRate) || 0.08));
+    const ep = Math.min(5000, Math.max(50, parseInt(epochs, 10) || 600));
+    const l2 = Math.min(0.1, Math.max(0, parseFloat(l2Regularization) || 0.001));
 
     const metrics = mlService.train({
-      testSplitRatio: testSplitRatio ? parseFloat(testSplitRatio) : 0.20,
-      learningRate: learningRate ? parseFloat(learningRate) : 0.08,
-      epochs: epochs ? parseInt(epochs, 10) : 600,
-      l2Regularization: l2Regularization !== undefined ? parseFloat(l2Regularization) : 0.001
+      testSplitRatio: split,
+      learningRate: lr,
+      epochs: ep,
+      l2Regularization: l2
     });
 
     return res.json({

@@ -1,6 +1,7 @@
 /**
  * PharmaScreen AI - Chemistry Calculator (In-Silico Fallback Engine)
- * Validated algorithms for SMILES parsing, descriptor calculation, and SVG structure generation.
+ * Validated graph-based cheminformatics algorithms for SMILES parsing,
+ * molecular topology, descriptor calculation, and SVG structure generation.
  */
 
 // Atomic weights (standard IUPAC values)
@@ -23,27 +24,23 @@ const ATOMIC_WEIGHTS = {
 
 // Valence for implicit hydrogen computation
 const STANDARD_VALENCE = {
+  B: 3,
   C: 4,
-  c: 3, // aromatic carbon typically has 1 attached H if unbranched
   N: 3,
-  n: 2,
   O: 2,
-  o: 2,
-  S: 2,
-  s: 2,
-  P: 3,
   F: 1,
+  P: 3,
+  S: 2,
   Cl: 1,
   Br: 1,
-  I: 1,
-  B: 3
+  I: 1
 };
 
 /**
  * Validates SMILES string syntax:
- * - Checks character set
+ * - Checks character set and non-empty input
  * - Verifies balanced parentheses () and square brackets []
- * - Verifies matching ring closure digits (1-9)
+ * - Verifies matching ring closure digits (1-9 and %10-%99)
  */
 function validateSmiles(smiles) {
   if (!smiles || typeof smiles !== 'string' || smiles.trim().length === 0) {
@@ -78,22 +75,35 @@ function validateSmiles(smiles) {
     return { valid: false, error: 'Unclosed square bracket in SMILES string' };
   }
 
-  // Ring closure digits verification (1-9)
-  const ringDigits = {};
+  // Ring closure digits verification (1-9 and %10-%99)
+  const ringCounts = {};
   let inBracket = false;
-  for (let i = 0; i < clean.length; i++) {
-    const ch = clean[i];
-    if (ch === '[') { inBracket = true; continue; }
-    if (ch === ']') { inBracket = false; continue; }
-    if (!inBracket && ch >= '1' && ch <= '9') {
-      ringDigits[ch] = (ringDigits[ch] || 0) + 1;
+  let idx = 0;
+  while (idx < clean.length) {
+    const ch = clean[idx];
+    if (ch === '[') { inBracket = true; idx++; continue; }
+    if (ch === ']') { inBracket = false; idx++; continue; }
+
+    if (!inBracket) {
+      if (ch === '%' && idx + 2 < clean.length) {
+        const ringNum = clean.substring(idx + 1, idx + 3);
+        ringCounts[`%${ringNum}`] = (ringCounts[`%${ringNum}`] || 0) + 1;
+        idx += 3;
+        continue;
+      } else if (ch >= '1' && ch <= '9') {
+        ringCounts[ch] = (ringCounts[ch] || 0) + 1;
+        idx++;
+        continue;
+      }
     }
+    idx++;
   }
-  for (const [digit, count] of Object.entries(ringDigits)) {
+
+  for (const [digit, count] of Object.entries(ringCounts)) {
     if (count % 2 !== 0) {
       return {
         valid: false,
-        error: `Unpaired ring closure digit '%${digit}' (found ${count} occurrences)`
+        error: `Unpaired ring closure digit '${digit}' (found ${count} occurrence${count === 1 ? '' : 's'})`
       };
     }
   }
@@ -183,56 +193,219 @@ function parseSmilesTokens(smiles) {
 }
 
 /**
- * Calculate Molecular Formula and Molecular Weight from SMILES
+ * Builds a full molecular graph representation from a SMILES string.
+ * Accurately tracks explicit bonds, ring closures, branches, valence, and implicit hydrogens.
  */
-function calculateMolecularFormulaAndWeight(smiles) {
-  const tokens = parseSmilesTokens(smiles);
-  const elementCounts = { C: 0, H: 0, N: 0, O: 0, S: 0, P: 0, F: 0, Cl: 0, Br: 0, I: 0 };
+function buildMolecularGraph(smiles) {
+  const clean = smiles.trim();
+  const atoms = [];
+  const bonds = [];
+  const ringClosures = {};
+  const branchStack = [];
 
-  // Track explicit and implicit hydrogen atoms
-  let estimatedH = 0;
+  let prevAtomIdx = null;
+  let nextBondOrder = 1;
+  let i = 0;
+  const len = clean.length;
 
-  for (let idx = 0; idx < tokens.length; idx++) {
-    const t = tokens[idx];
-    if (t.type === 'atom') {
-      const sym = t.symbol;
-      elementCounts[sym] = (elementCounts[sym] || 0) + 1;
+  while (i < len) {
+    const ch = clean[i];
 
-      // Estimate implicit H based on valence and aromaticity
-      if (t.aromatic) {
-        // In aromatic rings: c has 1 H if not substituted, n has 0 or 1 H
-        if (sym === 'C') estimatedH += 1;
+    // Branching: '(' pushes prevAtomIdx to stack; ')' pops
+    if (ch === '(') {
+      branchStack.push(prevAtomIdx);
+      i++;
+      continue;
+    }
+    if (ch === ')') {
+      prevAtomIdx = branchStack.pop();
+      i++;
+      continue;
+    }
+
+    // Explicit bonds
+    if (ch === '-') { nextBondOrder = 1; i++; continue; }
+    if (ch === '=') { nextBondOrder = 2; i++; continue; }
+    if (ch === '#') { nextBondOrder = 3; i++; continue; }
+    if (ch === ':') { nextBondOrder = 1.5; i++; continue; }
+    if (ch === '.') { prevAtomIdx = null; nextBondOrder = 1; i++; continue; }
+
+    // Ring closure numbers: 1-9 or %10-%99
+    if ((ch >= '1' && ch <= '9') || ch === '%') {
+      let ringNum = ch;
+      let advance = 1;
+      if (ch === '%') {
+        ringNum = clean.substring(i + 1, i + 3);
+        advance = 3;
+      }
+      i += advance;
+
+      if (ringClosures[ringNum] !== undefined) {
+        // Close ring
+        const openInfo = ringClosures[ringNum];
+        delete ringClosures[ringNum];
+        bonds.push({
+          a1: openInfo.atomIdx,
+          a2: prevAtomIdx,
+          order: openInfo.bondOrder !== 1 ? openInfo.bondOrder : nextBondOrder,
+          inRing: true
+        });
+        nextBondOrder = 1;
       } else {
-        if (sym === 'C') estimatedH += 2; // average unbranched aliphatic CH2
-        else if (sym === 'N') estimatedH += 1;
-        else if (sym === 'O') estimatedH += 0;
+        // Open ring
+        ringClosures[ringNum] = { atomIdx: prevAtomIdx, bondOrder: nextBondOrder };
+        nextBondOrder = 1;
       }
-    } else if (t.type === 'bracket') {
-      const raw = t.raw;
-      // Extract element symbol
-      const elMatch = raw.match(/([A-Z][a-z]?)/);
+      continue;
+    }
+
+    // Bracket atom [NH+], [O-], [OH], etc.
+    if (ch === '[') {
+      const closeIdx = clean.indexOf(']', i);
+      if (closeIdx === -1) break;
+      const raw = clean.substring(i + 1, closeIdx);
+      i = closeIdx + 1;
+
+      // Extract symbol
+      const elMatch = raw.match(/([A-Z][a-z]?|[a-z])/);
+      let symbol = 'C';
+      let aromatic = false;
       if (elMatch) {
-        const el = elMatch[1];
-        elementCounts[el] = (elementCounts[el] || 0) + 1;
+        const rawSym = elMatch[1];
+        if (rawSym === rawSym.toLowerCase()) {
+          symbol = rawSym.toUpperCase();
+          aromatic = true;
+        } else {
+          symbol = rawSym;
+        }
       }
-      // Extract explicit H count e.g. [NH2], [CH3], [OH]
+
+      // Explicit H in bracket
+      let explicitH = 0;
       const hMatch = raw.match(/H([0-9]?)/);
       if (hMatch) {
-        const hCount = hMatch[1] ? parseInt(hMatch[1], 10) : 1;
-        estimatedH += hCount;
+        explicitH = hMatch[1] ? parseInt(hMatch[1], 10) : 1;
+      }
+
+      // Charge
+      let charge = 0;
+      const chargeMatch = raw.match(/([+-])([0-9]?)/);
+      if (chargeMatch) {
+        const sign = chargeMatch[1] === '+' ? 1 : -1;
+        const val = chargeMatch[2] ? parseInt(chargeMatch[2], 10) : 1;
+        charge = sign * val;
+      }
+
+      const atomIdx = atoms.length;
+      atoms.push({
+        symbol,
+        aromatic,
+        bracket: true,
+        explicitH,
+        charge,
+        raw
+      });
+
+      if (prevAtomIdx !== null) {
+        bonds.push({ a1: prevAtomIdx, a2: atomIdx, order: nextBondOrder, inRing: false });
+        nextBondOrder = 1;
+      }
+      prevAtomIdx = atomIdx;
+      continue;
+    }
+
+    // Two-letter unbracketed atoms: Cl, Br, Na, Mg
+    let atomSymbol = null;
+    let isAromatic = false;
+    if (i + 1 < len) {
+      const two = clean.substring(i, i + 2);
+      if (['Cl', 'Br', 'Na', 'Mg'].includes(two)) {
+        atomSymbol = two;
+        i += 2;
+      }
+    }
+
+    if (!atomSymbol) {
+      if (['B', 'C', 'N', 'O', 'P', 'S', 'F', 'I'].includes(ch)) {
+        atomSymbol = ch;
+        isAromatic = false;
+        i++;
+      } else if (['b', 'c', 'n', 'o', 'p', 's'].includes(ch)) {
+        atomSymbol = ch.toUpperCase();
+        isAromatic = true;
+        i++;
+      } else {
+        i++;
+        continue;
+      }
+    }
+
+    const atomIdx = atoms.length;
+    atoms.push({
+      symbol: atomSymbol,
+      aromatic: isAromatic,
+      bracket: false,
+      explicitH: 0,
+      charge: 0,
+      raw: atomSymbol
+    });
+
+    if (prevAtomIdx !== null) {
+      let order = nextBondOrder;
+      if (order === 1 && isAromatic && atoms[prevAtomIdx].aromatic) {
+        order = 1.5;
+      }
+      bonds.push({ a1: prevAtomIdx, a2: atomIdx, order, inRing: false });
+      nextBondOrder = 1;
+    }
+    prevAtomIdx = atomIdx;
+  }
+
+  // Calculate bonded valence and adjacency list
+  const bondedValence = new Array(atoms.length).fill(0);
+  const adj = Array.from({ length: atoms.length }, () => []);
+
+  for (const b of bonds) {
+    bondedValence[b.a1] += b.order;
+    bondedValence[b.a2] += b.order;
+    adj[b.a1].push({ neighbor: b.a2, order: b.order, inRing: b.inRing });
+    adj[b.a2].push({ neighbor: b.a1, order: b.order, inRing: b.inRing });
+  }
+
+  // Compute implicit hydrogens for every atom
+  for (let idx = 0; idx < atoms.length; idx++) {
+    const a = atoms[idx];
+    const sym = a.symbol;
+    if (a.bracket) {
+      a.hCount = a.explicitH;
+    } else {
+      const stdVal = STANDARD_VALENCE[sym] || 0;
+      const bv = bondedValence[idx];
+      if (a.aromatic) {
+        if (sym === 'C') a.hCount = Math.max(0, 4 - Math.round(bv));
+        else if (sym === 'N') a.hCount = Math.max(0, 3 - Math.round(bv));
+        else a.hCount = Math.max(0, stdVal - Math.round(bv));
+      } else {
+        a.hCount = Math.max(0, stdVal - Math.round(bv));
       }
     }
   }
 
-  // Adjust for double/triple bonds and rings which subtract 2 H per unsaturation
-  let unsaturations = 0;
-  for (const t of tokens) {
-    if (t.type === 'bond_or_branch' && t.symbol === '=') unsaturations += 1;
-    if (t.type === 'bond_or_branch' && t.symbol === '#') unsaturations += 2;
-    if (t.type === 'ring') unsaturations += 0.5; // each ring closure pair = 1 unsaturation
+  return { atoms, bonds, adj, bondedValence };
+}
+
+/**
+ * Calculate Molecular Formula and Molecular Weight from SMILES
+ */
+function calculateMolecularFormulaAndWeight(smiles) {
+  const graph = buildMolecularGraph(smiles);
+  const elementCounts = { C: 0, H: 0, N: 0, O: 0, S: 0, P: 0, F: 0, Cl: 0, Br: 0, I: 0 };
+
+  for (const a of graph.atoms) {
+    const sym = a.symbol;
+    elementCounts[sym] = (elementCounts[sym] || 0) + 1;
+    elementCounts.H = (elementCounts.H || 0) + a.hCount;
   }
-  estimatedH = Math.max(0, Math.round(estimatedH - unsaturations));
-  elementCounts.H = (elementCounts.H || 0) + estimatedH;
 
   // Build Hill system formula: C first, then H, then alphabetically
   let formula = '';
@@ -261,47 +434,32 @@ function calculateMolecularFormulaAndWeight(smiles) {
 
 /**
  * Calculate Hydrogen Bond Donors (HBD):
- * Sum of OH, NH, NH2 groups.
+ * Sum of OH and NH hydrogen atoms attached to heteroatoms.
  */
 function calculateHBD(smiles) {
+  const graph = buildMolecularGraph(smiles);
   let hbd = 0;
-  // Specific regex patterns for donor groups in SMILES
-  // OH: [OH], O(=O)O (acids have 1 donor), terminal -O or -OH
-  const ohMatches = smiles.match(/\[OH\]|(?<!=)O(?=[H\)])|(?<!=)O$|(?<!=)O(?=[A-Z])/g) || [];
-  // Exclude ether oxygens (e.g. COC) from count
-  let trueOH = 0;
-  // Look for hydroxyl or carboxylic acid patterns
-  const acidMatches = smiles.match(/C\(=O\)O/g) || [];
-  const phenolOrAlcohol = smiles.match(/[c|C]O(?![A-Za-z0-9=])/g) || [];
-  const bracketOH = smiles.match(/\[OH\]/g) || [];
-  trueOH = acidMatches.length + phenolOrAlcohol.length + bracketOH.length;
-
-  // NH patterns: [nH], [NH], [NH2], NH2, NH
-  const nhBracketMatches = smiles.match(/\[[nN]H[0-9]?\]/g) || [];
-  const primaryAmine = smiles.match(/N(?=[H2\)])|(?<![a-zA-Z])NH2/g) || [];
-  const secondaryAmine = smiles.match(/CNc|cNc|CNC|cNC|CNC(=O)/g) || [];
-
-  hbd = trueOH + nhBracketMatches.length + secondaryAmine.length;
-  // Safety bound
-  return Math.max(0, hbd);
+  for (const a of graph.atoms) {
+    if ((a.symbol === 'O' || a.symbol === 'N') && a.hCount > 0) {
+      hbd += a.hCount;
+    }
+  }
+  return hbd;
 }
 
 /**
  * Calculate Hydrogen Bond Acceptors (HBA):
- * Count of O, N atoms with lone pairs (excluding positively charged [N+]).
+ * Count of O and N atoms with available lone pairs (excluding positively charged states).
  */
 function calculateHBA(smiles) {
-  let count = 0;
-  const tokens = parseSmilesTokens(smiles);
-  for (const t of tokens) {
-    if (t.type === 'atom') {
-      if (t.symbol === 'O' || t.symbol === 'N') count++;
-    } else if (t.type === 'bracket') {
-      if (t.raw.includes('N+') || t.raw.includes('n+')) continue; // Quaternary N is not acceptor
-      if (t.raw.includes('O') || t.raw.includes('N') || t.raw.includes('n')) count++;
+  const graph = buildMolecularGraph(smiles);
+  let hba = 0;
+  for (const a of graph.atoms) {
+    if ((a.symbol === 'O' || a.symbol === 'N') && a.charge <= 0) {
+      hba += 1;
     }
   }
-  return count;
+  return hba;
 }
 
 /**
@@ -309,33 +467,41 @@ function calculateHBA(smiles) {
  * Polar atoms: O, N, S (polar states), and their attached H.
  */
 function calculateTPSA(smiles) {
+  const graph = buildMolecularGraph(smiles);
   let tpsa = 0.0;
-  const tokens = parseSmilesTokens(smiles);
 
-  // Carbonyl O (=O): ~17.07 Å²
-  const carbonyls = (smiles.match(/=O/g) || []).length;
-  tpsa += carbonyls * 17.07;
+  for (let idx = 0; idx < graph.atoms.length; idx++) {
+    const a = graph.atoms[idx];
+    const sym = a.symbol;
+    const hCount = a.hCount;
+    const neighbors = graph.adj[idx];
 
-  // Hydroxyl / Ether O:
-  const oCount = (smiles.match(/(?<!=)O|(?<!=)o/g) || []).length;
-  // Non-carbonyl oxygens: alcohol (~20.23 Å²), ether (~9.23 Å²)
-  tpsa += oCount * 14.5;
-
-  // Nitrogen contributions:
-  // Primary amine -NH2 (~26.0 Å²), Secondary -NH- (~15.7 Å²), Tertiary =N- (~12.9 Å²), Pyridine (~12.89 Å²)
-  for (const t of tokens) {
-    if (t.type === 'atom' && (t.symbol === 'N' || t.symbol === 'n')) {
-      tpsa += 14.0;
-    } else if (t.type === 'bracket' && (t.raw.includes('N') || t.raw.includes('n'))) {
-      if (t.raw.includes('H2')) tpsa += 26.0;
-      else if (t.raw.includes('H')) tpsa += 15.8;
-      else tpsa += 12.5;
+    if (sym === 'O') {
+      const isDoubleBonded = neighbors.some(nb => nb.order === 2);
+      if (isDoubleBonded) {
+        tpsa += 17.07; // Carbonyl / nitro / sulfonyl =O
+      } else if (hCount > 0) {
+        tpsa += 20.23; // Hydroxyl -OH
+      } else {
+        tpsa += 9.23; // Ether / ester -O-
+      }
+    } else if (sym === 'N') {
+      const isDoubleBonded = neighbors.some(nb => nb.order === 2);
+      if (a.aromatic) {
+        tpsa += hCount > 0 ? 15.79 : 12.89; // Pyrrole-type vs Pyridine-type
+      } else if (isDoubleBonded) {
+        tpsa += hCount > 0 ? 23.85 : 12.36; // Imine
+      } else if (hCount === 2) {
+        tpsa += 26.02; // Primary amine -NH2
+      } else if (hCount === 1) {
+        tpsa += 15.79; // Secondary amine -NH-
+      } else {
+        tpsa += 3.24; // Tertiary amine >N-
+      }
+    } else if (sym === 'S') {
+      const hasDoubleO = neighbors.some(nb => nb.order === 2 && graph.atoms[nb.neighbor].symbol === 'O');
+      if (hasDoubleO) tpsa += 8.38;
     }
-  }
-
-  // Nitro groups [N+](=O)[O-] adds ~45.0 Å²
-  if (smiles.includes('[N+](=O)[O-]') || smiles.includes('N(=O)=O')) {
-    tpsa += 25.0;
   }
 
   return parseFloat(tpsa.toFixed(1));
@@ -346,38 +512,39 @@ function calculateTPSA(smiles) {
  * Using atomic fragment additive contributions.
  */
 function calculateLogP(smiles) {
+  const graph = buildMolecularGraph(smiles);
   let logP = 0.0;
-  const tokens = parseSmilesTokens(smiles);
 
-  for (const t of tokens) {
-    if (t.type === 'atom') {
-      if (t.symbol === 'C') {
-        logP += t.aromatic ? 0.35 : 0.20;
-      } else if (t.symbol === 'O') {
-        logP -= 0.40;
-      } else if (t.symbol === 'N') {
-        logP -= 0.60;
-      } else if (t.symbol === 'F') {
-        logP += 0.25;
-      } else if (t.symbol === 'Cl') {
-        logP += 0.65;
-      } else if (t.symbol === 'Br') {
-        logP += 0.85;
-      } else if (t.symbol === 'I') {
-        logP += 1.05;
-      } else if (t.symbol === 'S') {
-        logP += 0.40;
+  for (let idx = 0; idx < graph.atoms.length; idx++) {
+    const a = graph.atoms[idx];
+    const sym = a.symbol;
+    const hCount = a.hCount;
+    const neighbors = graph.adj[idx];
+
+    if (sym === 'C') {
+      if (a.aromatic) {
+        logP += hCount > 0 ? 0.35 : 0.28;
+      } else {
+        if (hCount === 3) logP += 0.52; // -CH3
+        else if (hCount === 2) logP += 0.38; // -CH2-
+        else if (hCount === 1) logP += 0.20; // >CH-
+        else logP += 0.12; // >C<
       }
-    } else if (t.type === 'bracket') {
-      if (t.raw.includes('OH')) logP -= 0.45;
-      else if (t.raw.includes('NH')) logP -= 0.70;
-      else if (t.raw.includes('C')) logP += 0.20;
-    }
+    } else if (sym === 'O') {
+      const isCarbonyl = neighbors.some(nb => nb.order === 2 && graph.atoms[nb.neighbor].symbol === 'C');
+      if (isCarbonyl) logP -= 0.35;
+      else if (hCount > 0) logP -= 0.55;
+      else logP -= 0.40;
+    } else if (sym === 'N') {
+      if (hCount === 2) logP -= 0.95;
+      else if (hCount === 1) logP -= 0.65;
+      else logP -= 0.45;
+    } else if (sym === 'F') logP += 0.20;
+    else if (sym === 'Cl') logP += 0.60;
+    else if (sym === 'Br') logP += 0.85;
+    else if (sym === 'I') logP += 1.05;
+    else if (sym === 'S') logP += 0.40;
   }
-
-  // Carboxylic acid hydrophilic penalty
-  const acidCount = (smiles.match(/C\(=O\)O/g) || []).length;
-  logP -= acidCount * 0.3;
 
   return parseFloat(logP.toFixed(2));
 }
@@ -385,29 +552,32 @@ function calculateLogP(smiles) {
 /**
  * Calculate Rotatable Bonds:
  * Any single non-ring bond, bounded to non-hydrogen heavy atoms,
- * excluding amide bonds (C-N resonance) and esters/terminal methyls.
+ * excluding amide bonds (C-N resonance) and terminal caps.
  */
 function calculateRotatableBonds(smiles) {
-  let rotatable = 0;
-  // A single bond is rotatable if it joins two non-terminal heavy atoms and is not in a ring.
-  // Count unbranched single linkages outside rings
-  const tokens = parseSmilesTokens(smiles);
-  const heavyAtoms = tokens.filter(t => t.type === 'atom' || t.type === 'bracket');
+  const graph = buildMolecularGraph(smiles);
+  let rotatableBonds = 0;
 
-  if (heavyAtoms.length <= 4) return 0;
+  for (const b of graph.bonds) {
+    if (b.order === 1 && !b.inRing) {
+      const deg1 = graph.adj[b.a1].length;
+      const deg2 = graph.adj[b.a2].length;
+      // Must connect two non-terminal heavy atoms (degree > 1)
+      if (deg1 > 1 && deg2 > 1) {
+        // Exclude amide bond C(=O)-N
+        const isAmide1 = graph.atoms[b.a1].symbol === 'C' && graph.atoms[b.a2].symbol === 'N' &&
+          graph.adj[b.a1].some(nb => nb.order === 2 && graph.atoms[nb.neighbor].symbol === 'O');
+        const isAmide2 = graph.atoms[b.a2].symbol === 'C' && graph.atoms[b.a1].symbol === 'N' &&
+          graph.adj[b.a2].some(nb => nb.order === 2 && graph.atoms[nb.neighbor].symbol === 'O');
 
-  // Approximate rotatable bonds by aliphatic non-ring linkages
-  const aliphaticCarbons = tokens.filter(t => t.type === 'atom' && t.symbol === 'C' && !t.aromatic).length;
-  const branches = (smiles.match(/\(/g) || []).length;
+        if (!isAmide1 && !isAmide2) {
+          rotatableBonds++;
+        }
+      }
+    }
+  }
 
-  // Estimate: number of single acyclic heavy bonds minus terminal caps
-  const estimated = Math.max(0, Math.floor((aliphaticCarbons + branches) * 0.45));
-
-  // Amide bond correction (C(=O)N has restricted rotation, so subtract)
-  const amides = (smiles.match(/C\(=O\)N/g) || []).length;
-  rotatable = Math.max(0, estimated - amides);
-
-  return Math.min(rotatable, 35);
+  return rotatableBonds;
 }
 
 /**
@@ -514,6 +684,7 @@ function calculateAllDescriptors(smiles) {
 module.exports = {
   validateSmiles,
   parseSmilesTokens,
+  buildMolecularGraph,
   calculateMolecularFormulaAndWeight,
   calculateHBD,
   calculateHBA,

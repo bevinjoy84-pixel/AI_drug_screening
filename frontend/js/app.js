@@ -148,6 +148,13 @@ const App = {
     // Module-specific hooks
     if (tabId === 'dashboard') {
       this.refreshDashboardStats();
+    } else if (tabId === 'screening') {
+      if (window.currentScreeningResult && window.PharmaCharts) {
+        const radarCanvas = document.getElementById('lipinskiRadarChart');
+        if (radarCanvas && window.currentScreeningResult.compound?.properties) {
+          window.PharmaCharts.drawRadarChart(radarCanvas, window.currentScreeningResult.compound.properties);
+        }
+      }
     } else if (tabId === 'ml') {
       if (window.MlEngineController) window.MlEngineController.loadModelMetrics();
     } else if (tabId === 'dataset') {

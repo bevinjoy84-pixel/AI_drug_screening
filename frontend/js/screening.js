@@ -225,12 +225,19 @@ const ScreeningController = {
 
     // 3. Physicochemical Descriptors
     const props = compound.properties;
-    this.updateDescriptorCard('propMw', `${props.molecularWeight.toFixed(2)} Da`, props.molecularWeight <= 500);
-    this.updateDescriptorCard('propLogP', props.logP !== null ? props.logP.toFixed(2) : 'N/A', props.logP <= 5.0);
-    this.updateDescriptorCard('propHbd', `${props.hbd}`, props.hbd <= 5);
-    this.updateDescriptorCard('propHba', `${props.hba}`, props.hba <= 10);
-    this.updateDescriptorCard('propTpsa', `${props.tpsa.toFixed(1)} Å²`, props.tpsa <= 140);
-    this.updateDescriptorCard('propRotb', `${props.rotatableBonds}`, props.rotatableBonds <= 10);
+    const mw = Number(props.molecularWeight) || 0;
+    const logP = (props.logP !== null && props.logP !== undefined && !isNaN(props.logP)) ? Number(props.logP) : null;
+    const hbd = Number(props.hbd) || 0;
+    const hba = Number(props.hba) || 0;
+    const tpsa = Number(props.tpsa) || 0;
+    const rotb = Number(props.rotatableBonds) || 0;
+
+    this.updateDescriptorCard('propMw', `${mw.toFixed(2)} Da`, mw <= 500);
+    this.updateDescriptorCard('propLogP', logP !== null ? logP.toFixed(2) : 'N/A', logP !== null ? logP <= 5.0 : false);
+    this.updateDescriptorCard('propHbd', `${hbd}`, hbd <= 5);
+    this.updateDescriptorCard('propHba', `${hba}`, hba <= 10);
+    this.updateDescriptorCard('propTpsa', `${tpsa.toFixed(1)} Å²`, tpsa <= 140);
+    this.updateDescriptorCard('propRotb', `${rotb}`, rotb <= 10);
 
     // 4. Lipinski Rule of 5 Classification Badge
     const classBadge = document.getElementById('screeningClassificationBadge');
@@ -428,6 +435,9 @@ const ScreeningController = {
       .replace(/^\s*-\s+(.*$)/gim, '<li class="ai-bullet-item">$1</li>')
       // Line breaks
       .replace(/\n\n/g, '<br/>');
+
+    // Wrap consecutive <li> items into <ul>
+    html = html.replace(/((?:<li class="ai-bullet-item">.*?<\/li>\s*)+)/gs, '<ul class="ai-bullet-list" style="padding-left: 20px; margin-bottom: 12px;">$1</ul>');
 
     return html;
   },

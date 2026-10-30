@@ -4,7 +4,7 @@
  * Securely communicates through backend only. Falls back gracefully to heuristic chemistry engine when API key is unset.
  */
 
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
 
 /**
  * Call Google Gemini API securely from backend
@@ -169,14 +169,14 @@ function generateHeuristicExplanation({
   // Section 1: Chemical Profile
   const sec1 = `### 1. Chemical Profile & Structural Overview
 **${compoundTitle}** (Formula: \`${formula || 'Derived'}\`) presents a calculated molecular mass of **${molecularWeight} Da**.
-The molecule contains **${rotatableBonds} rotatable single bonds**, establishing its structural flexibility, alongside **${hbd} hydrogen bond donor(s)** and **${hba} hydrogen bond acceptor(s)**. Its topological polar surface area is **${tpsa} Å²**, reflecting the overall solvent-accessible polar electronic cloud.`;
+The molecule contains **${rotatableBonds} rotatable single bond${rotatableBonds === 1 ? '' : 's'}**, establishing its structural flexibility, alongside **${hbd} hydrogen bond donor(s)** and **${hba} hydrogen bond acceptor(s)**. Its topological polar surface area is **${tpsa} Å²**, reflecting the overall solvent-accessible polar electronic cloud.`;
 
   // Section 2: Drug-Likeness & Lipinski Compliance
   let sec2 = `### 2. Drug-Likeness & Lipinski Rule of Five Assessment\n`;
   if (violationList.length === 0) {
     sec2 += `The molecule satisfies **all criteria of Lipinski's Rule of Five** without a single violation:
 - **Molecular Mass:** At ${molecularWeight} Da, it stays safely beneath the 500 Da diffusion ceiling.
-- **Lipophilicity (LogP):** The partition coefficient of ${logP} falls within the favorable range (0 to 5.0), ensuring adequate aqueous solubility in intestinal fluid and sufficient lipophilicity to partition across the lipid bilayer.
+- **Lipophilicity (LogP):** The partition coefficient of ${logP !== null ? logP : 'optimal'} falls within the favorable range (0 to 5.0), ensuring adequate aqueous solubility in intestinal fluid and sufficient lipophilicity to partition across the lipid bilayer.
 - **Hydrogen Bonding Capacity:** With ${hbd} donor(s) (≤ 5) and ${hba} acceptor(s) (≤ 10), the desolvation penalty required to cross the hydrophobic core of the cellular membrane is thermodynamically favorable.`;
   } else {
     sec2 += `The compound exhibits **${violationList.length} criteria violation(s)** under the Rule of Five:
@@ -186,7 +186,8 @@ Under classical medicinal chemistry guidelines, molecules with multiple violatio
 
   // Section 3: ADMET Implications
   let sec3 = `### 3. Pharmacokinetic (ADMET) Considerations\n`;
-  if (tpsa <= 90 && rotatableBonds <= 7 && logP >= 1.0 && logP <= 3.5) {
+  const numLogP = logP !== null ? logP : 2.0;
+  if (tpsa <= 90 && rotatableBonds <= 7 && numLogP >= 1.0 && numLogP <= 3.5) {
     sec3 += `- **Permeability:** High probability of excellent passive transcellular intestinal absorption. The low polar surface area (${tpsa} Å² ≤ 90 Å²) may also permit passage across the blood-brain barrier (BBB).
 - **Metabolism & Clearance:** Balanced lipophilicity suggests moderate hepatic CYP450 metabolism without extreme non-specific tissue accumulation.`;
   } else if (tpsa > 140 || molecularWeight > 500) {

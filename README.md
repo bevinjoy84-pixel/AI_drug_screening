@@ -126,9 +126,14 @@ pharmascreen-ai/
 │   └── index.html                   # Single-page application interface
 ├── .env.example                     # Environment configuration template
 ├── .gitignore                       # Git ignore rules
+├── .dockerignore                    # Docker ignore build context rules
+├── Dockerfile                       # Multi-stage production container manifest
+├── docker-compose.yml               # Production container composition with persistence
 ├── package.json                     # Project manifest and scripts
 ├── package-lock.json                # Locked dependency tree
-└── README.md                        # Documentation
+├── test/
+│   └── test-all.js                  # Automated 30-point unit & integration test suite
+└── README.md                        # Platform documentation
 ```
 
 ---
@@ -172,11 +177,68 @@ Start the Node.js server:
 npm start
 ```
 
-### 5. Access the Dashboard
+### 5. Run Automated Tests
+Execute the 30-point unit and integration test suite:
+```bash
+npm test
+```
+
+### 6. Access the Dashboard
 Open your web browser and navigate to:
 ```
 http://localhost:3000
 ```
+
+---
+
+## 🐳 Production Docker Deployment
+
+PharmaScreen AI includes a production-grade multi-stage Dockerfile and Docker Compose configuration optimized for security, small image footprint (~120MB), and persistent storage.
+
+### Option A: Using Docker Compose (Recommended)
+
+1. **Start the production container in detached mode:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+2. **Verify container health and logs:**
+   ```bash
+   docker compose ps
+   docker compose logs -f
+   ```
+
+3. **Data persistence:**
+   The `./data` volume is mounted automatically to `/app/data` inside the container, preserving screening history and custom compound archives across container updates and restarts.
+
+4. **Stop the container:**
+   ```bash
+   docker compose down
+   ```
+
+### Option B: Using Standalone Docker CLI
+
+1. **Build the production image:**
+   ```bash
+   docker build -t pharmascreen-ai:latest .
+   ```
+
+2. **Run the container with persistent storage:**
+   ```bash
+   docker run -d \
+     --name pharmascreen-ai \
+     --restart unless-stopped \
+     -p 3000:3000 \
+     -e NODE_ENV=production \
+     -e GEMINI_API_KEY="" \
+     -v "$(pwd)/data:/app/data" \
+     pharmascreen-ai:latest
+   ```
+
+3. **Check container status and healthcheck:**
+   ```bash
+   docker ps -f name=pharmascreen-ai
+   ```
 
 ---
 

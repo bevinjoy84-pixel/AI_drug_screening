@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  pharmascreen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pharmascreen-ai:latest
+    container_name: pharmascreen-ai
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Mount data directory for persistent screening history and custom compound datasets
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 128M

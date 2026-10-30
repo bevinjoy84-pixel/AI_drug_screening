@@ -4,7 +4,7 @@
  */
 
 const API = {
-  baseUrl: '',
+  baseUrl: "https://ai-drug-screening.onrender.com",
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;

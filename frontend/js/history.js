@@ -22,7 +22,8 @@ const HistoryController = {
 
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        window.location.href = '/api/history/export';
+        const base = (window.API && window.API.baseUrl) ? window.API.baseUrl : '';
+        window.location.href = `${base}/api/history/export`;
         window.App.notify('Exporting screening history to CSV...', 'info');
       });
     }

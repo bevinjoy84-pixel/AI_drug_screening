@@ -21,7 +21,8 @@ const VEBER_THRESHOLDS = {
  */
 function evaluateDrugLikeness(properties) {
   const mw = parseFloat(properties.molecularWeight) || 0;
-  const logP = properties.logP !== null && properties.logP !== undefined ? parseFloat(properties.logP) : null;
+  const rawLogP = properties.logP !== null && properties.logP !== undefined ? parseFloat(properties.logP) : null;
+  const logP = (rawLogP !== null && !isNaN(rawLogP)) ? rawLogP : null;
   const hbd = parseInt(properties.hbd, 10) || 0;
   const hba = parseInt(properties.hba, 10) || 0;
   const rotatableBonds = parseInt(properties.rotatableBonds, 10) || 0;
@@ -48,7 +49,7 @@ function evaluateDrugLikeness(properties) {
 
   // Classification determination
   let classification = 'Promising Candidate';
-  let badgeColor = 'success'; // for UI
+  let badgeColor = 'success';
   let summary = '';
 
   if (totalViolations === 0) {
@@ -82,10 +83,12 @@ function evaluateDrugLikeness(properties) {
       threshold: `≤ ${LIPINSKI_THRESHOLDS.LOGP_MAX}`,
       value: logP !== null ? logP.toFixed(2) : 'N/A',
       violated: logPViolation,
-      status: logPViolation ? 'Violated' : 'Compliant',
-      rationale: logPViolation
-        ? `LogP of ${logP.toFixed(2)} exceeds 5.0. Excessive lipophilicity leads to poor aqueous solubility, non-specific protein binding, and rapid hepatic clearance.`
-        : 'Lipophilicity is balanced, allowing both adequate aqueous solubility in gastric fluid and lipid bilayer partition.'
+      status: logP !== null ? (logPViolation ? 'Violated' : 'Compliant') : 'Unspecified',
+      rationale: logP !== null
+        ? (logPViolation
+          ? `LogP of ${logP.toFixed(2)} exceeds 5.0. Excessive lipophilicity leads to poor aqueous solubility, non-specific protein binding, and rapid hepatic clearance.`
+          : 'Lipophilicity is balanced, allowing both adequate aqueous solubility in gastric fluid and lipid bilayer partition.')
+        : 'Lipophilicity could not be computed from available structural data.'
     },
     {
       rule: 'Hydrogen Bond Donors (HBD)',

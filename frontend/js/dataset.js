@@ -31,7 +31,8 @@ const DatasetController = {
 
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        window.location.href = '/api/dataset/export';
+        const base = (window.API && window.API.baseUrl) ? window.API.baseUrl : '';
+        window.location.href = `${base}/api/dataset/export`;
         window.App.notify('Exporting compound dataset to CSV...', 'info');
       });
     }

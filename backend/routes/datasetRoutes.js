@@ -18,7 +18,7 @@ router.get('/', (req, res) => {
     let list = storageService.getAllCompounds();
 
     // Search filter: name, smiles, formula, therapeutic class
-    if (search.trim()) {
+    if (typeof search === 'string' && search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(c =>
         (c.name && c.name.toLowerCase().includes(q)) ||
@@ -36,14 +36,16 @@ router.get('/', (req, res) => {
     // Violations filter
     if (violations !== undefined && violations !== '' && violations !== 'All') {
       const vNum = parseInt(violations, 10);
-      list = list.filter(c => c.lipinskiViolations === vNum);
+      if (!isNaN(vNum)) {
+        list = list.filter(c => c.lipinskiViolations === vNum);
+      }
     }
 
     // MW range filter
-    if (minMw) {
+    if (minMw && !isNaN(parseFloat(minMw))) {
       list = list.filter(c => c.molecularWeight >= parseFloat(minMw));
     }
-    if (maxMw) {
+    if (maxMw && !isNaN(parseFloat(maxMw))) {
       list = list.filter(c => c.molecularWeight <= parseFloat(maxMw));
     }
 

@@ -9,14 +9,18 @@ const path = require('path');
 const SAMPLE_DRUGS_PATH = path.join(__dirname, '../../data/sample_drugs.json');
 const HISTORY_PATH = path.join(__dirname, '../../data/history.json');
 
-// Ensure directory exists
+// Ensure directory and file exists safely
 function ensureFileExists(filePath, defaultContent = '[]') {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, defaultContent, 'utf8');
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, defaultContent, 'utf8');
+    }
+  } catch (err) {
+    console.error(`[StorageService] Failed to ensure file exists at ${filePath}:`, err.message);
   }
 }
 
@@ -41,7 +45,8 @@ function getScreeningHistory() {
   ensureFileExists(HISTORY_PATH, '[]');
   try {
     const raw = fs.readFileSync(HISTORY_PATH, 'utf8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('[StorageService] Error reading history:', err.message);
     return [];
@@ -55,6 +60,36 @@ function addScreeningRecord(record) {
   ensureFileExists(HISTORY_PATH, '[]');
   const history = getScreeningHistory();
 
+  const rawMw = record.molecularWeight !== undefined ? record.molecularWeight : record.properties?.molecularWeight;
+  const mw = (rawMw !== null && rawMw !== undefined && !isNaN(parseFloat(rawMw)))
+    ? parseFloat(parseFloat(rawMw).toFixed(2))
+    : 0;
+
+  const rawLogP = record.logP !== undefined ? record.logP : record.properties?.logP;
+  const cleanLogP = (rawLogP !== null && rawLogP !== undefined && !isNaN(parseFloat(rawLogP)))
+    ? parseFloat(parseFloat(rawLogP).toFixed(2))
+    : null;
+
+  const rawHbd = record.hbd !== undefined ? record.hbd : record.properties?.hbd;
+  const hbd = (rawHbd !== null && rawHbd !== undefined && !isNaN(parseInt(rawHbd, 10)))
+    ? parseInt(rawHbd, 10)
+    : 0;
+
+  const rawHba = record.hba !== undefined ? record.hba : record.properties?.hba;
+  const hba = (rawHba !== null && rawHba !== undefined && !isNaN(parseInt(rawHba, 10)))
+    ? parseInt(rawHba, 10)
+    : 0;
+
+  const rawTpsa = record.tpsa !== undefined ? record.tpsa : record.properties?.tpsa;
+  const tpsa = (rawTpsa !== null && rawTpsa !== undefined && !isNaN(parseFloat(rawTpsa)))
+    ? parseFloat(parseFloat(rawTpsa).toFixed(1))
+    : 0;
+
+  const rawRotB = record.rotatableBonds !== undefined ? record.rotatableBonds : record.properties?.rotatableBonds;
+  const rotatableBonds = (rawRotB !== null && rawRotB !== undefined && !isNaN(parseInt(rawRotB, 10)))
+    ? parseInt(rawRotB, 10)
+    : 0;
+
   const newEntry = {
     id: `screen-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     timestamp: new Date().toISOString(),
@@ -62,12 +97,12 @@ function addScreeningRecord(record) {
     smiles: record.smiles,
     formula: record.formula || '',
     properties: {
-      molecularWeight: parseFloat(record.molecularWeight || record.properties?.molecularWeight || 0),
-      logP: record.logP !== undefined ? parseFloat(record.logP) : (record.properties?.logP !== undefined ? parseFloat(record.properties.logP) : null),
-      hbd: parseInt(record.hbd || record.properties?.hbd || 0, 10),
-      hba: parseInt(record.hba || record.properties?.hba || 0, 10),
-      tpsa: parseFloat(record.tpsa || record.properties?.tpsa || 0),
-      rotatableBonds: parseInt(record.rotatableBonds || record.properties?.rotatableBonds || 0, 10)
+      molecularWeight: mw,
+      logP: cleanLogP,
+      hbd,
+      hba,
+      tpsa,
+      rotatableBonds
     },
     violations: record.violations || {},
     classification: record.classification || 'Unknown',
@@ -82,7 +117,11 @@ function addScreeningRecord(record) {
     history.pop();
   }
 
-  fs.writeFileSync(HISTORY_PATH, JSON.stringify(history, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(HISTORY_PATH, JSON.stringify(history, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[StorageService] Error writing history file:', err.message);
+  }
   return newEntry;
 }
 
@@ -91,17 +130,29 @@ function addScreeningRecord(record) {
  */
 function deleteScreeningRecord(id) {
   const history = getScreeningHistory();
-  const filtered = history.filter(item => item.id !== id);
-  fs.writeFileSync(HISTORY_PATH, JSON.stringify(filtered, null, 2), 'utf8');
-  return filtered.length !== history.length;
+  const filtered = history.filter(item => item && item.id !== id);
+  const deleted = filtered.length !== history.length;
+  if (deleted) {
+    try {
+      fs.writeFileSync(HISTORY_PATH, JSON.stringify(filtered, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[StorageService] Error deleting record:', err.message);
+    }
+  }
+  return deleted;
 }
 
 /**
  * Clear all history
  */
 function clearHistory() {
-  fs.writeFileSync(HISTORY_PATH, JSON.stringify([], null, 2), 'utf8');
-  return true;
+  try {
+    fs.writeFileSync(HISTORY_PATH, JSON.stringify([], null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('[StorageService] Error clearing history:', err.message);
+    return false;
+  }
 }
 
 /**
@@ -115,21 +166,29 @@ function getDashboardMetrics() {
   const uniqueCompoundsMap = new Map();
 
   for (const c of catalog) {
+    if (!c || !c.smiles) continue;
     uniqueCompoundsMap.set(c.smiles, {
-      mw: c.molecularWeight,
-      logP: c.logP,
-      classification: c.classification,
-      violations: c.lipinskiViolations
+      mw: typeof c.molecularWeight === 'number' ? c.molecularWeight : parseFloat(c.molecularWeight || 0),
+      logP: (c.logP !== null && c.logP !== undefined && !isNaN(parseFloat(c.logP))) ? parseFloat(c.logP) : null,
+      classification: c.classification || 'Unknown',
+      violations: c.lipinskiViolations || 0
     });
   }
 
   for (const h of history) {
+    if (!h || !h.smiles) continue;
     if (!uniqueCompoundsMap.has(h.smiles)) {
+      const hMw = parseFloat(h.properties?.molecularWeight || h.molecularWeight || 0);
+      const rawLogP = h.properties?.logP !== undefined ? h.properties.logP : h.logP;
+      const hLogP = (rawLogP !== null && rawLogP !== undefined && !isNaN(parseFloat(rawLogP)))
+        ? parseFloat(rawLogP)
+        : null;
+
       uniqueCompoundsMap.set(h.smiles, {
-        mw: h.properties.molecularWeight,
-        logP: h.properties.logP,
-        classification: h.classification,
-        violations: h.violations.totalViolations || 0
+        mw: hMw,
+        logP: hLogP,
+        classification: h.classification || 'Unknown',
+        violations: h.violations?.totalViolations ?? h.lipinskiViolations ?? 0
       });
     }
   }
@@ -142,11 +201,11 @@ function getDashboardMetrics() {
   let unfavorableCount = 0;
 
   let totalMw = 0;
+  let validMwCount = 0;
   let validLogPCount = 0;
   let totalLogP = 0;
 
-  // MW distribution bins
-  // <200, 200-350, 350-500, >500
+  // MW distribution bins: <200, 200-350, 350-500, >500
   const mwDistribution = {
     '<200 Da': 0,
     '200-350 Da': 0,
@@ -157,10 +216,12 @@ function getDashboardMetrics() {
   for (const c of allCompounds) {
     if (c.classification === 'Promising Candidate') promisingCount++;
     else if (c.classification === 'Needs Review') needsReviewCount++;
-    else unfavorableCount++;
+    else if (c.classification === 'Unfavorable') unfavorableCount++;
+    else needsReviewCount++;
 
-    if (c.mw) {
+    if (c.mw && !isNaN(c.mw) && c.mw > 0) {
       totalMw += c.mw;
+      validMwCount++;
       if (c.mw < 200) mwDistribution['<200 Da']++;
       else if (c.mw <= 350) mwDistribution['200-350 Da']++;
       else if (c.mw <= 500) mwDistribution['350-500 Da']++;
@@ -173,7 +234,7 @@ function getDashboardMetrics() {
     }
   }
 
-  const averageMw = totalAnalyzed > 0 ? parseFloat((totalMw / totalAnalyzed).toFixed(1)) : 0;
+  const averageMw = validMwCount > 0 ? parseFloat((totalMw / validMwCount).toFixed(1)) : 0;
   const averageLogP = validLogPCount > 0 ? parseFloat((totalLogP / validLogPCount).toFixed(2)) : 0;
 
   return {
@@ -233,7 +294,7 @@ function exportToCsv(records) {
       `"${(r.smiles || '').replace(/"/g, '""')}"`,
       `"${r.formula || ''}"`,
       mw,
-      logP,
+      logP !== null && logP !== undefined ? logP : '',
       hbd,
       hba,
       tpsa,
