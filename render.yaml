@@ -1,11 +1,10 @@
 services:
   - type: web
     name: pharmascreen-ai
-    runtime: docker
+    runtime: node
     plan: free
-    rootDir: .
-    dockerfilePath: Dockerfile
-    dockerContext: .
+    buildCommand: npm install
+    startCommand: node backend/server.js
     envVars:
       - key: PORT
         value: 3000
@@ -13,4 +12,3 @@ services:
         value: production
       - key: GEMINI_API_KEY
         sync: false
-
