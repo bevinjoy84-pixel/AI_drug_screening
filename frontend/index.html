@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PharmaScreen AI – Drug Discovery Lab</title>
+  <meta name="description" content="Educational in-silico drug candidate screening platform analyzing chemical compounds with SMILES, Lipinski's Rule of Five, Machine Learning, and AI explanations." />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Animated DNA Double-Helix Canvas Background -->
+  <canvas id="dnaCanvas"></canvas>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i class="fas fa-dna"></i>
+        </div>
+        <div>
+          <div class="brand-title">PharmaScreen <span>AI</span></div>
+          <div class="brand-subtitle">Drug Discovery Lab</div>
+        </div>
+      </div>
+
+      <ul class="sidebar-nav">
+        <li class="nav-section-title">Core Modules</li>
+        <li>
+          <a class="nav-item active" data-tab="dashboard">
+            <i class="fas fa-chart-pie"></i>
+            <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="screening">
+            <i class="fas fa-flask-vial"></i>
+            <span>Drug Screening</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="ml">
+            <i class="fas fa-brain-circuit"></i>
+            <span>ML Predictor</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="dataset">
+            <i class="fas fa-database"></i>
+            <span>Compound Dataset</span>
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="history">
+            <i class="fas fa-clock-rotate-left"></i>
+            <span>Screening History</span>
+          </a>
+        </li>
+
+        <li class="nav-section-title">Documentation</li>
+        <li>
+          <a class="nav-item" data-tab="methodology">
+            <i class="fas fa-book-medical"></i>
+            <span>Methodology & Rules</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="system-status-box">
+          <div id="backendStatusPill" class="status-pill">
+            <span class="status-dot dot-cyan"></span> Checking Server...
+          </div>
+          <div id="geminiStatusPill" class="status-pill pill-cyan">
+            <span class="status-dot dot-cyan"></span> AI Engine Ready
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <header class="main-header">
+        <div class="d-flex align-items-center gap-3">
+          <button id="sidebarToggleBtn" class="mobile-menu-toggle" aria-label="Toggle Navigation">
+            <i class="fas fa-bars"></i>
+          </button>
+          <div class="header-title-block">
+            <h1><i class="fas fa-atom text-cyan"></i> In-Silico Molecular Screening Platform</h1>
+            <p>Computational cheminformatics, Lipinski Rule of Five evaluation & AI-assisted drug-likeness assessment</p>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <!-- Animated Running Toggle Switch for Dark / Light Mode -->
+          <div id="themeToggleBtn" class="running-theme-switch" role="button" tabindex="0" title="Switch Theme (Light / Dark)" aria-label="Toggle Dark and Light theme">
+            <div class="switch-track">
+              <div class="track-side light-side">
+                <i class="fas fa-sun text-amber-500"></i>
+                <span>Light</span>
+              </div>
+              <div class="track-side dark-side">
+                <i class="fas fa-moon text-indigo-400"></i>
+                <span>Dark</span>
+              </div>
+              <div class="running-thumb">
+                <span class="thumb-content">
+                  <i class="fas fa-sun thumb-icon"></i>
+                  <span class="thumb-label">Light</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-outline-slate btn-sm" onclick="App.switchTab('methodology')">
+            <i class="fas fa-circle-info"></i> Research Protocol
+          </button>
+          <button class="btn btn-primary-cyan btn-sm" onclick="App.switchTab('screening')">
+            <i class="fas fa-plus"></i> New Screening
+          </button>
+        </div>
+      </header>
+
+      <!-- ========================================== -->
+      <!-- TAB 1: DASHBOARD -->
+      <!-- ========================================== -->
+      <section id="tab-dashboard" class="tab-view active">
+        <!-- Metric Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-vials"></i></div>
+            <div class="stat-label">Total Compounds Analyzed</div>
+            <div id="dashTotalAnalyzed" class="stat-value text-cyan">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-circle-check"></i></div>
+            <div class="stat-label">Promising Candidates</div>
+            <div id="dashPromisingCount" class="stat-value text-green">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div>
+            <div class="stat-label">Needs Review / Borderline</div>
+            <div id="dashReviewCount" class="stat-value text-amber">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-circle-xmark"></i></div>
+            <div class="stat-label">Unfavorable / Violations</div>
+            <div id="dashUnfavorableCount" class="stat-value text-red">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-weight-scale"></i></div>
+            <div class="stat-label">Average Molecular Weight</div>
+            <div id="dashAvgMw" class="stat-value">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-droplet"></i></div>
+            <div class="stat-label">Average LogP (Lipophilicity)</div>
+            <div id="dashAvgLogP" class="stat-value">--</div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-chart-pie"></i> Compound Classification Distribution</div>
+              <span class="badge badge-cyan">Lipinski Profiles</span>
+            </div>
+            <div class="chart-card-body">
+              <canvas id="dashClassificationDonutChart"></canvas>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-chart-simple"></i> Molecular Weight Distribution (Da)</div>
+              <span class="badge badge-cyan">Threshold: ≤ 500 Da</span>
+            </div>
+            <div class="chart-card-body">
+              <canvas id="dashMwBarChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Screener Launchpad Strip & Recent Feed -->
+        <div class="screening-split-layout">
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-bolt"></i> Sample Launchpad</div>
+            </div>
+            <p class="text-sm text-slate-400 mb-3">1-click test load for key benchmark compounds:</p>
+            <div class="d-flex flex-column gap-2">
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="aspirin">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Aspirin (NSAID)</span>
+                <span class="badge badge-success">0 Violations</span>
+              </button>
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="paracetamol">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Paracetamol</span>
+                <span class="badge badge-success">0 Violations</span>
+              </button>
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="ibuprofen">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Ibuprofen</span>
+                <span class="badge badge-success">0 Violations</span>
+              </button>
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="metformin">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Metformin</span>
+                <span class="badge badge-success">0 Violations</span>
+              </button>
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="imatinib">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Imatinib (Oncology)</span>
+                <span class="badge badge-success">Compliant</span>
+              </button>
+              <button class="btn btn-outline-slate text-start justify-content-between quick-screen-launch" data-sample="atorvastatin">
+                <span><i class="fas fa-pills text-cyan mr-2"></i> Atorvastatin (Statin)</span>
+                <span class="badge badge-danger">2 Violations</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-clock-rotate-left"></i> Recent Screening Activity</div>
+              <button class="btn btn-xs btn-outline-cyan" onclick="App.switchTab('history')">View Full History</button>
+            </div>
+            <div id="dashRecentFeed" class="activity-feed">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 2: DRUG SCREENING -->
+      <!-- ========================================== -->
+      <section id="tab-screening" class="tab-view">
+        <div class="glass-card">
+          <div class="card-header-clean">
+            <div class="card-title"><i class="fas fa-microchip"></i> Chemical Candidate Input & Verification</div>
+            <span class="badge badge-cyan"><i class="fas fa-shield-halved"></i> Live SMILES Parser</span>
+          </div>
+
+          <!-- Sample Compounds Quick Bar -->
+          <div class="sample-drugs-strip">
+            <span class="sample-strip-label"><i class="fas fa-flask"></i> Quick Samples:</span>
+            <button class="sample-drug-pill active" data-sample="aspirin">Aspirin</button>
+            <button class="sample-drug-pill" data-sample="paracetamol">Paracetamol</button>
+            <button class="sample-drug-pill" data-sample="ibuprofen">Ibuprofen</button>
+            <button class="sample-drug-pill" data-sample="metformin">Metformin</button>
+            <button class="sample-drug-pill" data-sample="caffeine">Caffeine</button>
+            <button class="sample-drug-pill" data-sample="imatinib">Imatinib</button>
+            <button class="sample-drug-pill" data-sample="atorvastatin">Atorvastatin</button>
+          </div>
+
+          <div class="row" style="display: grid; grid-template-columns: 1fr 280px; gap: 18px;">
+            <div class="form-group mb-0">
+              <label class="form-label" for="smilesInput">Simplified Molecular-Input Line-Entry System (SMILES):</label>
+              <input type="text" id="smilesInput" class="form-control font-mono" placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O" value="CC(=O)Oc1ccccc1C(=O)O" />
+              <div id="smilesValidationStatus" class="mt-2 text-xs">
+                <span class="text-success"><i class="fas fa-check-circle"></i> Valid SMILES syntax</span>
+              </div>
+            </div>
+
+            <div class="form-group mb-0">
+              <label class="form-label" for="compoundNameInput">Compound Name (Optional Label):</label>
+              <input type="text" id="compoundNameInput" class="form-control" placeholder="e.g. Aspirin" value="Aspirin" />
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-4">
+            <div class="text-xs text-slate-400">
+              <i class="fas fa-database text-cyan"></i> Retrieves live PubChem PUG REST properties with fallback in-silico topological calculations.
+            </div>
+            <button id="screenCandidateBtn" class="btn btn-primary-cyan">
+              <i class="fas fa-dna"></i> Screen Candidate Molecule
+            </button>
+          </div>
+        </div>
+
+        <!-- Screening Results Section (Loaded on Screening) -->
+        <div id="screeningResultsContainer" class="d-none">
+          <!-- Split Overview: 2D Depiction & Identity Header -->
+          <div class="screening-split-layout">
+            <div class="structure-box">
+              <div id="molecularStructureView">
+                <!-- Structure Image or Fallback SVG -->
+              </div>
+            </div>
+
+            <div class="glass-card mb-0">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                  <h2 id="resultCompoundName" class="text-2xl font-bold text-light mb-1">Aspirin</h2>
+                  <div class="text-xs text-slate-400 font-mono">Formula: <span id="resultFormula" class="text-cyan">C9H8O4</span></div>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-1.5">
+                  <div id="screeningClassificationBadge" class="status-badge status-promising">Promising Candidate</div>
+                  <div id="screeningViolationsBadge" class="badge badge-success">0 Violations</div>
+                  <span id="resultSourceBadge" class="badge badge-cyan">PubChem PUG REST API</span>
+                </div>
+              </div>
+
+              <div class="form-group mb-3">
+                <label class="form-label text-xs">Canonical SMILES:</label>
+                <div id="resultSmiles" class="font-mono text-cyan text-xs glass-panel rounded break-all">
+                  CC(=O)Oc1ccccc1C(=O)O
+                </div>
+              </div>
+
+              <p id="screeningSummaryText" class="text-sm text-slate-300 leading-relaxed mb-4">
+                Zero Lipinski violations detected. The compound satisfies all four Rule-of-Five physicochemical boundaries, suggesting favorable passive gastrointestinal absorption.
+              </p>
+
+              <!-- Quick ML Prediction Snippet -->
+              <div class="glass-panel d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="text-xs text-slate-400 font-medium"><i class="fas fa-brain-circuit text-cyan"></i> ML Drug-Likeness Probability:</div>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    <span id="quickMlClassBadge" class="badge badge-success">Drug-like</span>
+                    <span id="quickMlScoreValue" class="font-mono font-bold text-cyan text-sm">--</span>
+                    <span id="quickMlConfidence" class="text-xs text-slate-400"></span>
+                  </div>
+                </div>
+                <button class="btn btn-xs btn-outline-cyan" onclick="App.switchTab('ml')">
+                  Open ML Dashboard <i class="fas fa-arrow-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Molecular Properties Grid -->
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-calculator"></i> Physicochemical Descriptors</div>
+              <span class="badge badge-slate">Lipinski & Veber Parameters</span>
+            </div>
+            <div class="descriptors-grid">
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>Molecular Weight (MW)</span>
+                  <span id="propMwIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propMw" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Threshold: ≤ 500.0 Da</div>
+              </div>
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>Partition Coeff (LogP)</span>
+                  <span id="propLogPIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propLogP" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Threshold: ≤ 5.0 (Octanol/Water)</div>
+              </div>
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>H-Bond Donors (HBD)</span>
+                  <span id="propHbdIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propHbd" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Threshold: ≤ 5 (OH, NH, NH2)</div>
+              </div>
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>H-Bond Acceptors (HBA)</span>
+                  <span id="propHbaIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propHba" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Threshold: ≤ 10 (O, N lone pairs)</div>
+              </div>
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>Polar Surface Area (TPSA)</span>
+                  <span id="propTpsaIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propTpsa" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Veber Threshold: ≤ 140.0 Å²</div>
+              </div>
+              <div class="descriptor-item">
+                <div class="descriptor-name">
+                  <span>Rotatable Bonds (RotB)</span>
+                  <span id="propRotbIndicator" class="status-dot dot-green"></span>
+                </div>
+                <div id="propRotb" class="descriptor-val">--</div>
+                <div class="descriptor-threshold">Veber Threshold: ≤ 10 Single Bonds</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Evaluation Breakdown Tables & Radar Chart Grid -->
+          <div class="charts-grid">
+            <div class="glass-card">
+              <div class="card-header-clean">
+                <div class="card-title"><i class="fas fa-list-check"></i> Lipinski's Rule of Five Evaluation</div>
+              </div>
+              <div class="scientific-table-wrapper">
+                <table class="scientific-table">
+                  <thead>
+                    <tr>
+                      <th>Rule</th>
+                      <th>Threshold</th>
+                      <th>Value</th>
+                      <th>Status</th>
+                      <th>Medicinal Chemistry Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lipinskiBreakdownTableBody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="card-title mt-4 mb-2"><i class="fas fa-route"></i> Veber Bioavailability Extension</div>
+              <div class="scientific-table-wrapper">
+                <table class="scientific-table">
+                  <thead>
+                    <tr>
+                      <th>Rule</th>
+                      <th>Threshold</th>
+                      <th>Value</th>
+                      <th>Status</th>
+                      <th>Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody id="veberBreakdownTableBody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-header-clean">
+                <div class="card-title"><i class="fas fa-compass-drafting"></i> Drug-Likeness Sweet-Spot Radar</div>
+                <span class="badge badge-cyan">Boundary ≤ 1.0</span>
+              </div>
+              <div class="chart-card-body" style="height: 320px;">
+                <canvas id="lipinskiRadarChart"></canvas>
+              </div>
+              <div class="text-xs text-center text-slate-400 mt-2">
+                Green dashed perimeter marks the optimal Lipinski/Veber pharmaceutical space.
+              </div>
+            </div>
+          </div>
+
+          <!-- AI-Assisted Medicinal Chemistry Explanation Box -->
+          <div class="glass-card ai-box">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="card-title">
+                <i class="fas fa-brain-circuit text-cyan"></i> AI-Assisted Pharmacological Explanation
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span id="aiProviderBadge" class="badge badge-slate">Ready</span>
+                <button id="requestAiExplanationBtn" class="btn btn-outline-cyan btn-sm">
+                  <i class="fas fa-wand-magic-sparkles"></i> Generate AI Explanation
+                </button>
+              </div>
+            </div>
+
+            <div id="aiExplanationContent">
+              <div class="ai-placeholder-prompt">
+                <i class="fas fa-microscope text-cyan fa-2x mb-2"></i>
+                <p class="text-slate-300">Click <strong>Generate AI Explanation</strong> to synthesize pharmacological mechanism, ADMET considerations, and lead optimization strategies.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: ML PREDICTION -->
+      <!-- ========================================== -->
+      <section id="tab-ml" class="tab-view">
+        <div class="glass-card">
+          <div class="card-header-clean">
+            <div>
+              <div class="card-title"><i class="fas fa-brain-circuit"></i> JavaScript Machine Learning Classification Engine</div>
+              <p class="text-xs text-slate-400 mt-1">Logistic Regression with L2 Regularization, Z-Score Standardized Feature Normalization & Stratified Train/Test Split.</p>
+            </div>
+            <span class="badge badge-cyan"><i class="fas fa-shield-check"></i> Genuine Metrics Only</span>
+          </div>
+
+          <!-- Genuine Verified Evaluation Metrics Grid -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-bullseye"></i></div>
+              <div class="stat-label">Model Accuracy</div>
+              <div id="mlMetricAccuracy" class="stat-value text-cyan">--%</div>
+              <div class="text-xs text-slate-500 mt-1">(TP+TN) / Total Test</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-crosshairs"></i></div>
+              <div class="stat-label">Model Precision</div>
+              <div id="mlMetricPrecision" class="stat-value text-green">--%</div>
+              <div class="text-xs text-slate-500 mt-1">TP / (TP+FP)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-arrows-to-eye"></i></div>
+              <div class="stat-label">Model Recall (Sensitivity)</div>
+              <div id="mlMetricRecall" class="stat-value text-amber">--%</div>
+              <div class="text-xs text-slate-500 mt-1">TP / (TP+FN)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-scale-balanced"></i></div>
+              <div class="stat-label">F1-Score (Harmonic Mean)</div>
+              <div id="mlMetricF1" class="stat-value text-cyan">--%</div>
+              <div class="text-xs text-slate-500 mt-1">2*(P*R) / (P+R)</div>
+            </div>
+          </div>
+          <div id="mlSampleSplitMeta" class="text-xs text-slate-400 text-center mb-3 font-mono">
+            Loading verified test split...
+          </div>
+        </div>
+
+        <!-- Confusion Matrix & Feature Importance Grid -->
+        <div class="charts-grid">
+          <!-- Genuine Confusion Matrix -->
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-table-cells-large"></i> Genuine Confusion Matrix</div>
+              <span class="badge badge-slate">Evaluated on Unseen Test Split</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-2">Evaluated strictly on held-out test data. Never simulated or hardcoded.</p>
+
+            <div class="confusion-matrix-grid">
+              <div></div>
+              <div class="text-xs font-bold text-center text-slate-400">Predicted Non-Drug</div>
+              <div class="text-xs font-bold text-center text-slate-400">Predicted Drug-Like</div>
+
+              <div class="text-xs font-bold text-slate-400 d-flex align-items-center">Actual Non-Drug</div>
+              <div class="cm-cell cm-correct" title="True Negative: Non-drug correctly classified as non-drug">
+                <span id="cmTrueNegative" class="cm-count">--</span>
+                <span class="cm-sublabel">True Neg (TN)</span>
+              </div>
+              <div class="cm-cell cm-incorrect" title="False Positive: Non-drug incorrectly classified as drug-like">
+                <span id="cmFalsePositive" class="cm-count">--</span>
+                <span class="cm-sublabel">False Pos (FP)</span>
+              </div>
+
+              <div class="text-xs font-bold text-slate-400 d-flex align-items-center">Actual Drug-Like</div>
+              <div class="cm-cell cm-incorrect" title="False Negative: Drug-like molecule incorrectly classified as non-drug">
+                <span id="cmFalseNegative" class="cm-count">--</span>
+                <span class="cm-sublabel">False Neg (FN)</span>
+              </div>
+              <div class="cm-cell cm-correct" title="True Positive: Drug-like molecule correctly classified as drug-like">
+                <span id="cmTruePositive" class="cm-count">--</span>
+                <span class="cm-sublabel">True Pos (TP)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Genuine Feature Importance -->
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-chart-column"></i> Verified Feature Weights & Relative Importance</div>
+              <span class="badge badge-cyan">Standardized Coefficients</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">Derived from absolute standardized logistic regression weights `|w_j|`.</p>
+
+            <div id="mlFeatureImportanceList">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Candidate Inference & Model Retraining -->
+        <div class="charts-grid">
+          <!-- Live Candidate Inference -->
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-flask"></i> Interactive Candidate Drug-Likeness Predictor</div>
+              <button id="loadFromScreenToMlBtn" class="btn btn-xs btn-outline-cyan">
+                <i class="fas fa-arrow-down"></i> Load from Active Screener
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;" class="mb-3">
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">Molecular Weight:</label>
+                <input type="number" id="mlInputMw" class="form-control form-control-sm font-mono" value="180.16" step="0.1" />
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">LogP:</label>
+                <input type="number" id="mlInputLogP" class="form-control form-control-sm font-mono" value="1.19" step="0.05" />
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">H-Bond Donors:</label>
+                <input type="number" id="mlInputHbd" class="form-control form-control-sm font-mono" value="1" min="0" />
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">H-Bond Acceptors:</label>
+                <input type="number" id="mlInputHba" class="form-control form-control-sm font-mono" value="3" min="0" />
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">TPSA (Å²):</label>
+                <input type="number" id="mlInputTpsa" class="form-control form-control-sm font-mono" value="63.6" step="0.5" />
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label text-xs">Rotatable Bonds:</label>
+                <input type="number" id="mlInputRotb" class="form-control form-control-sm font-mono" value="2" min="0" />
+              </div>
+            </div>
+
+            <button id="runMlPredictBtn" class="btn btn-primary-cyan w-100 mb-3">
+              <i class="fas fa-calculator"></i> Predict Drug-Likeness Probability
+            </button>
+
+            <!-- Prediction Result Card -->
+            <div id="mlPredictionResultCard" class="glass-panel">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                  <span class="text-xs text-slate-400">Classification:</span>
+                  <div id="mlResultClass" class="status-badge status-promising mt-1">Drug-like</div>
+                </div>
+                <div class="text-end">
+                  <span class="text-xs text-slate-400">Confidence Score:</span>
+                  <div id="mlResultConfidence" class="font-mono text-cyan text-base font-bold">--%</div>
+                </div>
+              </div>
+
+              <div class="mb-2">
+                <div class="d-flex justify-content-between text-xs text-slate-400 mb-1">
+                  <span>Drug-Likeness Probability P(y=1)</span>
+                  <span id="mlResultProb" class="font-bold text-light">--%</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div id="mlResultProbBar" class="progress-bar-fill" style="width: 50%;"></div>
+                </div>
+              </div>
+
+              <div class="text-xs text-slate-500 mb-2 font-mono">
+                Logit z = <span id="mlResultLogit" class="text-light">0.0</span> (Threshold z ≥ 0.0)
+              </div>
+
+              <div class="text-xs font-semibold text-slate-400 mt-2 mb-1">Feature Contributions to Prediction:</div>
+              <div id="mlFeatureContributionsList" class="max-h-36 overflow-y-auto">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Model Retraining Form -->
+          <div class="glass-card">
+            <div class="card-header-clean">
+              <div class="card-title"><i class="fas fa-sliders"></i> Classifier Hyperparameter Calibration</div>
+              <span class="badge badge-slate">Live Re-train</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+              Adjust hyperparameters to re-train the JavaScript Logistic Regression model on the curated benchmark dataset and observe real-time metric recalculation:
+            </p>
+
+            <div class="form-group">
+              <label class="form-label text-xs">Test Split Ratio (Default 0.20):</label>
+              <input type="number" id="retrainSplitInput" class="form-control font-mono" min="0.10" max="0.40" step="0.05" value="0.20" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label text-xs">Learning Rate (Alpha):</label>
+              <input type="number" id="retrainLrInput" class="form-control font-mono" min="0.01" max="0.5" step="0.01" value="0.08" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label text-xs">Training Epochs:</label>
+              <input type="number" id="retrainEpochsInput" class="form-control font-mono" min="100" max="2000" step="100" value="600" />
+            </div>
+
+            <button id="executeRetrainBtn" class="btn btn-outline-cyan w-100">
+              <i class="fas fa-rotate"></i> Retrain Model & Recalculate Metrics
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 4: COMPOUND DATASET EXPLORER -->
+      <!-- ========================================== -->
+      <section id="tab-dataset" class="tab-view">
+        <div class="glass-card">
+          <div class="card-header-clean">
+            <div>
+              <div class="card-title"><i class="fas fa-database"></i> Curated Pharmaceutical Reference Dataset</div>
+              <p class="text-xs text-slate-400 mt-1">Explore well-characterized pharmaceutical compounds with molecular descriptors, Lipinski compliance, and screening tags.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span id="datasetTotalCountBadge" class="badge badge-cyan">-- Compounds</span>
+              <button id="exportDatasetCsvBtn" class="btn btn-outline-cyan btn-sm">
+                <i class="fas fa-download"></i> Export to CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Filters Row -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px;" class="mb-4">
+            <div>
+              <label class="form-label text-xs">Search Compounds:</label>
+              <input type="text" id="datasetSearchInput" class="form-control" placeholder="Search by name, SMILES, formula, therapeutic class..." />
+            </div>
+            <div>
+              <label class="form-label text-xs">Classification Filter:</label>
+              <select id="datasetClassFilter" class="form-control">
+                <option value="All">All Classifications</option>
+                <option value="Promising Candidate">Promising Candidate</option>
+                <option value="Needs Review">Needs Review</option>
+                <option value="Unfavorable">Unfavorable</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label text-xs">Violations Filter:</label>
+              <select id="datasetViolFilter" class="form-control">
+                <option value="All">All Violations</option>
+                <option value="0">0 Violations (Fully Compliant)</option>
+                <option value="1">1 Violation (Borderline)</option>
+                <option value="2">2 Violations</option>
+                <option value="3">3 Violations</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span id="datasetFilteredCount" class="text-xs text-slate-400 font-mono">Showing all compounds</span>
+            <span class="text-xs text-slate-500"><i class="fas fa-circle-info"></i> Includes verified benchmark demo data</span>
+          </div>
+
+          <!-- Compounds Table -->
+          <div class="scientific-table-wrapper">
+            <table class="scientific-table">
+              <thead>
+                <tr>
+                  <th>Compound</th>
+                  <th>SMILES Notation</th>
+                  <th>Formula</th>
+                  <th>MW (Da)</th>
+                  <th>LogP</th>
+                  <th>HBD/HBA</th>
+                  <th>TPSA (Å²)</th>
+                  <th>RotB</th>
+                  <th>Classification</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="datasetTableBody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 5: SCREENING HISTORY -->
+      <!-- ========================================== -->
+      <section id="tab-history" class="tab-view">
+        <div class="glass-card">
+          <div class="card-header-clean">
+            <div>
+              <div class="card-title"><i class="fas fa-clock-rotate-left"></i> Screening History Archive</div>
+              <p class="text-xs text-slate-400 mt-1">Review past in-silico analyses, examine rule violations, and export history records.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span id="historyTotalCountBadge" class="badge badge-cyan">-- Records</span>
+              <button id="exportHistoryCsvBtn" class="btn btn-outline-cyan btn-sm">
+                <i class="fas fa-file-csv"></i> Export History CSV
+              </button>
+              <button id="clearHistoryBtn" class="btn btn-outline-danger btn-sm">
+                <i class="fas fa-trash"></i> Clear All
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <input type="text" id="historySearchInput" class="form-control" placeholder="Search screening history by name, SMILES, or classification..." />
+          </div>
+
+          <!-- History Table -->
+          <div class="scientific-table-wrapper">
+            <table class="scientific-table">
+              <thead>
+                <tr>
+                  <th>Timestamp / Compound</th>
+                  <th>SMILES</th>
+                  <th>MW (Da)</th>
+                  <th>LogP</th>
+                  <th>HBD/HBA</th>
+                  <th>TPSA (Å²)</th>
+                  <th>Classification</th>
+                  <th>Data Source</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 6: METHODOLOGY & SCIENTIFIC DISCLAIMERS -->
+      <!-- ========================================== -->
+      <section id="tab-methodology" class="tab-view">
+        <div class="glass-card">
+          <div class="card-header-clean">
+            <div class="card-title"><i class="fas fa-book-medical"></i> Scientific Foundations & Cheminformatics Rules</div>
+            <span class="badge badge-cyan">Educational Reference</span>
+          </div>
+
+          <div class="ai-generated-report">
+            <h3 class="text-lg font-bold text-light mb-2">1. Lipinski's Rule of Five (Pfizer, 1997)</h3>
+            <p class="text-slate-300 mb-3 leading-relaxed">
+              Formulated by <strong>Dr. Christopher A. Lipinski</strong>, the Rule of Five is a statistical heuristic to evaluate drug-likeness and predict whether a chemical compound has chemical and physical properties that would make it likely to be an orally active drug in humans:
+            </p>
+            <ul class="text-slate-300 mb-4" style="padding-left: 20px;">
+              <li><strong>Molecular Weight (MW) ≤ 500 Da:</strong> Smaller molecules diffuse more readily across mucosal and enterocyte lipid bilayers. Above 500 Da, permeation drops drastically.</li>
+              <li><strong>Octanol-Water Partition Coefficient (LogP) ≤ 5.0:</strong> Balances aqueous solubility in the gastrointestinal tract with sufficient lipophilicity to cross hydrophobic cellular membranes.</li>
+              <li><strong>Hydrogen Bond Donors (HBD) ≤ 5:</strong> Calculated as the sum of all OH and NH groups. Excessive donors increase the thermodynamic desolvation penalty when leaving the aqueous phase.</li>
+              <li><strong>Hydrogen Bond Acceptors (HBA) ≤ 10:</strong> Calculated as the sum of all nitrogen and oxygen atoms. High acceptor counts generate large hydration shells that impede passive membrane diffusion.</li>
+            </ul>
+
+            <h3 class="text-lg font-bold text-light mb-2">2. Veber's Bioavailability Criteria (GSK, 2002)</h3>
+            <p class="text-slate-300 mb-3 leading-relaxed">
+              Dr. Daniel Veber and colleagues demonstrated that molecular flexibility and polar surface area are even stronger determinants of oral bioavailability in rats than molecular weight alone:
+            </p>
+            <ul class="text-slate-300 mb-4" style="padding-left: 20px;">
+              <li><strong>Rotatable Bonds ≤ 10:</strong> Molecules with fewer than 10 rotatable bonds have reduced conformational entropy loss upon binding and cross membranes more efficiently.</li>
+              <li><strong>Topological Polar Surface Area (TPSA) ≤ 140 Å²:</strong> Molecules with TPSA under 140 Å² exhibit adequate permeation through enterocytes. TPSA under 90 Å² is typically necessary for blood-brain barrier (BBB) penetration.</li>
+            </ul>
+
+            <h3 class="text-lg font-bold text-light mb-2">3. Known Exceptions & Beyond-the-Rule-of-5 (bRo5)</h3>
+            <p class="text-slate-300 mb-3 leading-relaxed">
+              Compliance with Lipinski's criteria is <em>neither necessary nor sufficient</em> for clinical efficacy:
+            </p>
+            <ul class="text-slate-300 mb-4" style="padding-left: 20px;">
+              <li><strong>Active Transporter Substrates:</strong> Molecules like Metformin (MW 129 Da, LogP -1.43) or Amoxicillin utilize specialized carrier-mediated transport mechanisms (e.g., OCT1, PEPT1).</li>
+              <li><strong>Macrocycles & Natural Products:</strong> Cyclosporine A (MW 1202 Da) violates multiple Lipinski parameters yet achieves oral bioavailability via intramolecular hydrogen bonding that temporarily masks polarity ("chameleonic" conformation).</li>
+              <li><strong>Target Specificity & Toxicity:</strong> A molecule can satisfy all Lipinski criteria perfectly and still be pharmacologically inert or lethally toxic (e.g., cyanide, nicotine).</li>
+            </ul>
+
+            <div class="research-disclaimer-callout mt-4">
+              <i class="fas fa-triangle-exclamation text-warning fa-2x"></i>
+              <div>
+                <strong class="text-warning">MANDATORY EDUCATIONAL RESEARCH PROTOTYPE DISCLAIMER</strong>
+                <p class="text-sm mt-1 mb-0 leading-relaxed">
+                  <strong>PharmaScreen AI – Drug Discovery Lab</strong> is strictly an educational and exploratory computational research prototype. All molecular descriptors, Lipinski evaluations, machine learning predictions, and AI-assisted explanations are in-silico approximations. They do not constitute clinical guidance, pharmacological validation, or proof of therapeutic efficacy or safety. Under no circumstances should outputs from this platform be used for medical decisions or clinical drug administration.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Global Toast Notification Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/charts.js"></script>
+  <script src="js/dna-canvas.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/screening.js"></script>
+  <script src="js/ml-engine.js"></script>
+  <script src="js/dataset.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

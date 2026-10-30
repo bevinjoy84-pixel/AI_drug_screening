@@ -1,0 +1,25 @@
+{
+  "name": "pharmascreen-ai",
+  "version": "1.0.0",
+  "description": "PharmaScreen AI - In-Silico Drug Candidate Screening and Prediction Platform",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js"
+  },
+  "keywords": [
+    "drug-screening",
+    "cheminformatics",
+    "lipinski-rule-of-five",
+    "smiles",
+    "machine-learning",
+    "gemini-ai"
+  ],
+  "author": "PharmaScreen AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
